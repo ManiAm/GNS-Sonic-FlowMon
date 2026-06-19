@@ -1,12 +1,13 @@
-
 # GNS-Sonic-FlowMon
 
-Sonic-FlowMon is a traffic visibility and telemetry toolkit designed specifically for Sonic-based network devices. It provides a dual approach to network observability, offering both deep, interface-level packet inspection and high-speed, scalable network telemetry. Whether you are performing real-time diagnostics on a single interface or aggregating flow data across a large topology, this toolkit automates the deployment and collection processes.
+Sonic-FlowMon is a traffic visibility and telemetry toolkit designed specifically for SONiC-based network devices. It provides a dual approach to network observability, offering both deep, interface-level packet inspection and high-speed, scalable network telemetry. Whether you are performing real-time diagnostics on a single interface or aggregating flow data across a large topology, this toolkit automates the deployment and collection processes.
 
 This repository provides two distinct monitoring methods:
 
 - **Packet Sniffing:** A lightweight, `scapy`-powered tool for deep packet inspection and PCAP generation.
 - **sFlow Telemetry:** An orchestration tool for enabling and collecting highly scalable, sampled flow metrics.
+
+For an overview of network visibility technologies (SPAN, RSPAN, ERSPAN, NetFlow, IPFIX, sFlow) and how this project's tools fit into the broader landscape, see [BACKGROUND.md](BACKGROUND.md).
 
 ## UDP Collector and Forwarding
 
@@ -16,7 +17,7 @@ Regardless of whether you use the Sniffer or sFlow, the captured data must be st
 
 **UDP Packet Collector**
 
-A sample implementation of a UDP-based packet collector is available in [here](packet_collector.py). This script runs on our local machine, listening on a designated UDP port for incoming traffic streamed from remote `Sonic1` devices.
+A sample implementation of a UDP-based packet collector is available [here](src/packet_collector.py). This script runs on the local machine, listening on a designated UDP port for incoming traffic streamed from the remote SONiC device.
 
 **Network Forwarding via `socat`**
 
@@ -28,7 +29,7 @@ A statically linked binary of `socat` includes all dependencies in a single exec
 
 **UDP Packet Forwarder**
 
-An implementation of a simple UDP forwarder is available in [udp_forwarder.py](udp_forwarder.py). This tool should be deployed on each jump host (e.g., gns3-vm, mgmt-host) to relay packets toward the local collector. The workflow assumes that passwordless SSH access is configured between the local machine and each jump host. For example:
+An implementation of a simple UDP forwarder is available in [udp_forwarder.py](src/udp_forwarder.py). This tool should be deployed on each jump host (e.g., gns3-vm, mgmt-host) to relay packets toward the local collector. The workflow assumes that passwordless SSH access is configured between the local machine and each jump host. For example:
 
     ssh gns3-vm
     ssh mgmt-host
@@ -47,11 +48,11 @@ The packet sniffer provides per-interface traffic monitoring capabilities withou
 
 - **Event Triggering & Alerting**: The utility can be integrated into alerting workflows by triggering notifications when specific traffic patterns are detected (for example, unusual ICMP activity, unexpected ARP broadcasts, or protocol violations). This makes it a lightweight, scriptable intrusion detection mechanism suitable for edge routers or test environments where full-scale IDS systems may not be feasible.
 
-- **Automation & Testing**: In CI/CD pipelines or automated testbeds, the sniffer can validate that expected traffic is flowing between virtual devices, confirming correct configuration of routing, VLANs, ACLs, or QoS. It also helps in regression testing by ensuring no unintended traffic is introduced after changes to Sonic software, device firmware, or topology configuration, making it a valuable tool in network validation workflows.
+- **Automation & Testing**: In CI/CD pipelines or automated testbeds, the sniffer can validate that expected traffic is flowing between virtual devices, confirming correct configuration of routing, VLANs, ACLs, or QoS. It also helps in regression testing by ensuring no unintended traffic is introduced after changes to SONiC software, device firmware, or topology configuration, making it a valuable tool in network validation workflows.
 
 ### Local Execution (Manual Setup)
 
-`scapy` is pre-installed on most Sonic builds. If it's missing, it can be installed as follows:
+`scapy` is pre-installed on most SONiC builds. If it's missing, it can be installed as follows:
 
     pip install scapy==2.4.4
 
@@ -92,7 +93,7 @@ You can limit captured traffic using Berkeley Packet Filter (BPF) syntax. To cap
 
 ### Automated Orchestration
 
-You can find the complete orchestrator script in [main_sniffer.py](main_sniffer.py). This utility automates the entire workflow: it sets up UDP forwarding through intermediate jump hosts, establishes an SSH connection to the target Sonic device (Sonic1), and remotely launches sniffer_local.py. Captured packets are streamed back to the local host, decoded, and displayed in real-time. Ensure that the [ssh_config](ssh_config) file is updated to reflect your environment and host configurations.
+You can find the complete orchestrator script in [main_sniffer.py](src/main_sniffer.py). This utility automates the entire workflow: it sets up UDP forwarding through intermediate jump hosts, establishes an SSH connection to the target SONiC device (`Sonic1`), and remotely launches `sniffer_local.py`. Captured packets are streamed back to the local host, decoded, and displayed in real-time. Ensure that the [ssh_config](src/ssh_config) file is updated to reflect your environment and host configurations.
 
     python3 main_sniffer.py
 
@@ -160,7 +161,7 @@ Ether / IP / ICMP 1.1.1.1 > 1.1.1.2 echo-request 0 / Raw
 Ether / IP / ICMP 1.1.1.2 > 1.1.1.1 echo-reply 0 / Raw
 ```
 
-### Limitation of Packet Sniffing
+### Limitations of Packet Sniffing
 
 While powerful, direct packet sniffing has limitations:
 
@@ -175,13 +176,11 @@ While powerful, direct packet sniffing has limitations:
 
 ## sFlow (Sampled Flow) Telemetry
 
-sFlow (Sampled Flow) is a packet sampling technology used to monitor high-speed networks by providing a scalable method for collecting traffic statistics. Instead of analyzing every packet, sFlow-enabled devices (like routers and switches) periodically sample packets and export metadata including interface counters and flow records to a centralized collector. This lightweight approach minimizes the performance impact on network devices while still delivering rich visibility into traffic patterns, bandwidth usage, and network behavior, making it ideal for large-scale monitoring and analytics.
-
-For sFlow to operate efficiently at data center speeds, the packet sampling mechanism must be implemented directly within the switch's hardware NPU (Network Processing Unit). At modern line rates (often reaching multiple terabits per second) relying on the switch's general-purpose CPU to inspect and sample traffic would overwhelm the control plane, leading to degraded routing performance and inaccurate telemetry. By performing randomized packet selection in the hardware data plane at wire speed, the ASIC ensures that only a fractional subset of traffic is forwarded to the software-based sFlow agent. The agent then encapsulates these samples into UDP datagrams for export, ensuring high-fidelity monitoring with near-zero impact on the switch's primary forwarding capabilities.
+sFlow is a hardware-accelerated packet sampling technology for monitoring high-speed networks at scale. Rather than capturing every packet, sFlow-enabled switches randomly sample packets directly in the switching ASIC at wire speed and export sampled headers along with periodic interface counters to a centralized collector via UDP. This stateless design imposes near-zero overhead on the switch's forwarding performance while still delivering rich visibility into traffic patterns, bandwidth usage, and network behavior. For a detailed explanation of how sFlow works and how it compares to other flow export technologies, see [BACKGROUND.md](BACKGROUND.md).
 
 ### Enabling sFlow on SONiC
 
-Sonic includes support for sFlow through a systemd-managed container service. However, by default, the `sflow.service` may be masked, which prevents it from being started manually or automatically.
+SONiC includes support for sFlow through a systemd-managed container service. However, by default, the `sflow.service` may be masked, which prevents it from being started manually or automatically.
 
 > In systemd, a masked service is one that is deliberately disabled by linking it to `/dev/null`. This prevents it from being started, either manually or during boot, regardless of other settings. Masking is typically used to ensure a service is completely disabled, even if enable is called elsewhere.
 
@@ -199,11 +198,11 @@ To allow the service to be managed, unmask it:
 
     admin@sonic:~$ sudo systemctl unmask sflow
 
-This step ensures the sFlow container will start automatically on reboot. Note: it does not start the service immediately.
+Configure the service to start automatically on boot:
 
     admin@sonic:~$ sudo systemctl enable sflow
 
-Manually start the sFlow service:
+Note: `enable` does not start the service immediately — it only registers it for future boots. To start the service now:
 
     admin@sonic:~$ sudo systemctl start sflow
 
@@ -235,4 +234,4 @@ This confirms that the sFlow service is active and the container is running.
 
 ### Automated sFlow Orchestration
 
-You can find the complete orchestrator script in [main_sflow.py](main_sflow.py). This utility automates the entire workflow: it sets up UDP forwarding through intermediate jump hosts, establishes an SSH connection to the target Sonic device (`Sonic1`), and enables sFlow. sFlow streams back to the local host, and we decode and display them. Ensure that the [ssh_config](ssh_config) file is updated to reflect your environment and host configurations.
+You can find the complete orchestrator script in [main_sflow.py](src/main_sflow.py). This utility automates the entire workflow: it sets up UDP forwarding through intermediate jump hosts, establishes an SSH connection to the target SONiC device (`Sonic1`), and enables sFlow. Received sFlow datagrams are decoded using [sonic_sflow_decode.py](src/sonic_sflow_decode.py) and displayed in real-time. Ensure that the [ssh_config](src/ssh_config) file is updated to reflect your environment and host configurations.

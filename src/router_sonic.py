@@ -59,7 +59,9 @@ class Router_Sonic(Router_Base):
         if not status:
             return False, output
 
-        with open("textfsm/ip_address_show.textfsm") as template_file:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        textfsm_path = os.path.join(script_dir, "textfsm", "ip_address_show.textfsm")
+        with open(textfsm_path) as template_file:
             fsm = textfsm.TextFSM(template_file)
             parsed_output = fsm.ParseText(output)
 

@@ -1,14 +1,18 @@
 
 import sys
+import os
 import logging
 import time
 import signal
 import queue
-from scapy.all import Ether
 
 from router_sonic import Router_Sonic
 from udp_forwarder import UDPForwarder
 from packet_collector import UDP_Collector
+from sonic_sflow_decode import sFlow
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SSH_CONFIG = os.path.join(SCRIPT_DIR, "ssh_config")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +59,7 @@ if __name__ == "__main__":
         host='sonic1-vm',
         username='admin',
         password='YourPaSsWoRd',
-        ssh_config_file="./ssh_config")
+        ssh_config_file=SSH_CONFIG)
 
     status, output = router.connect()
     if not status:
@@ -64,15 +68,15 @@ if __name__ == "__main__":
 
     #####################
 
-    sniffer_port = 6343
+    sflow_port = 6343
     udp_collector_port = 26343
 
     print("\nForwarding mgmt-host → gns3-vm \n")
 
     forwarder1 = UDPForwarder(
         run_socat_on="mgmt-host",
-        ssh_config_file="./ssh_config",
-        listen_port=sniffer_port,
+        ssh_config_file=SSH_CONFIG,
+        listen_port=sflow_port,
         target_port=16343
     )
 
@@ -82,7 +86,7 @@ if __name__ == "__main__":
 
     forwarder2 = UDPForwarder(
         run_socat_on="gns3-vm",
-        ssh_config_file="./ssh_config",
+        ssh_config_file=SSH_CONFIG,
         listen_port=16343,
         target_port=udp_collector_port
     )
@@ -91,14 +95,15 @@ if __name__ == "__main__":
 
     #####################
 
-    duration = 120
-    print(f"\nStarting sniffer collector on port {udp_collector_port} for {duration} seconds...")
+    print(f"\nStarting sflow collector on port {udp_collector_port}...")
 
-    # making sure collector is up and running before starting the sniffer.
+    # making sure collector is up and running before starting the sflow.
+    # 1386 bytes is the largest possible sFlow packet.
+    # by spec 3000 seems to be the number by practice.
     udp_collector = UDP_Collector(host="0.0.0.0",
                                   port=udp_collector_port,
                                   max_buffer_size=3000,
-                                  duration=duration)
+                                  duration=120)
 
     status, output = udp_collector.start_collector()
     if not status:
@@ -107,50 +112,27 @@ if __name__ == "__main__":
 
     #####################
 
-    status, output = router.get_default_gw()
-    if not status:
-        log.error(output)
-        sys.exit(1)
+    print("\nStarting sflow...")
 
-    default_gw = output
-
-    #####################
-
-    print(f"\nStarting remote sniffer for {duration} seconds...")
-
-    # Starting the sniffer daemon on the router.
-    # It sniffs packets on Etherne0 and sends the packets to collector ip/port.
-    # We sniff for maximum of 'count' packets for 'duration' seconds.
-
-    filter_val = "ether proto 0x0800 and icmp"
-
-    status, output = router.start_sniffer(
-            "Ethernet0",
-            default_gw,
-            sniffer_port,
-            duration=duration,
-            count=50,
-            s_filter=filter_val)
-
+    status, output = router.configure_sflow()
     if not status:
         log.error(output)
         sys.exit(1)
 
     #####################
 
-    print("\nCollecting sniffed packets in real-time...\n")
+    print("\nCollecting sflow packets...")
 
     buffer = udp_collector.get_collector_buffer()
 
     while udp_collector.is_collector_running() or (buffer and not buffer.empty()):
 
         try:
-            packet_byte = buffer.get(timeout=1)
+            packet = buffer.get(timeout=1)
         except queue.Empty:
             continue
 
-        decoded_packet = Ether(packet_byte)
-        packet_summary = decoded_packet.summary()
-        print(packet_summary)
+        sflow_data = sFlow(packet)
+        sflow_data.dump()
 
     stop_all()
