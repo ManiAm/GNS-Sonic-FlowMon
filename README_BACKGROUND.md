@@ -1,4 +1,5 @@
-# Background: Network Visibility Technologies
+
+# Network Visibility Technologies
 
 Network visibility refers to the ability to observe, capture, and analyze traffic flowing through a network. At the infrastructure level, network devices provide two fundamental mechanisms for making traffic available to monitoring tools:
 
@@ -12,8 +13,8 @@ Network visibility refers to the ability to observe, capture, and analyze traffi
                 │                               │
         ┌───────┼───────┐               ┌───────┼───────┐
         │       │       │               │       │       │
-       TAP    SPAN   ERSPAN          NetFlow  IPFIX  sFlow
-              RSPAN                  (Cisco)  (IETF) (sampled)
+       TAP    SPAN   ERSPAN          NetFlow  IPFIX   sFlow
+              RSPAN                  (Cisco)  (IETF)  (sampled)
 ```
 
 ## Traffic Mirroring
@@ -33,15 +34,11 @@ Flow export technologies provide summarized metadata about network traffic witho
 
 Two distinct architectures exist within this category. **Stateful flow tracking** (NetFlow, IPFIX) maintains an in-memory flow cache on the device, aggregating packets into flows and exporting summarized records when flows expire. **Stateless packet sampling** (sFlow) randomly samples individual packets in hardware and immediately exports sampled headers — no flow state is maintained on the device. Each architecture offers different trade-offs between accuracy, scalability, and resource consumption.
 
-- **NetFlow:** Developed by Cisco as a proprietary protocol for IP traffic flow information. The device maintains a flow cache, grouping packets into flows based on shared key fields (typically source/destination IP, ports, protocol, type of service, and input interface). When a flow expires due to inactivity, reaches a maximum active duration, or when the cache fills, a summarized record is exported to a collector. NetFlow v5 uses a fixed record format supporting only IPv4 and ingress traffic. NetFlow v9 introduced flexible, template-based records, decoupling the data structure from the protocol and adding support for IPv6, MPLS, and egress flows. Vendor-specific variants include Juniper's J-Flow and Huawei's NetStream, which are largely compatible with NetFlow v9.
+- **NetFlow:** Developed by Cisco as a proprietary protocol for IP traffic flow information. The device maintains a flow cache, grouping packets into flows based on shared key fields (typically source/destination IP, ports, protocol, type of service, and input interface). When a flow expires due to inactivity, reaches a maximum active duration, or when the cache fills, a summarized record is exported to a collector. NetFlow v5 uses a fixed record format supporting only IPv4 and ingress traffic. NetFlow v9 introduced flexible, template-based records, decoupling the data structure from the protocol and adding support for IPv6, MPLS, and egress flows. Vendor-specific variants include Juniper's **J-Flow** and Huawei's **NetStream**, which are largely compatible with NetFlow v9.
 
 - **IPFIX (IP Flow Information Export):** The IETF standard (RFC 7011) for flow data export, based on NetFlow v9. IPFIX provides a vendor-neutral, extensible, template-based format and is sometimes informally referred to as "NetFlow v10." It formalized the information model (RFC 7012), added support for variable-length fields, and defined a standard set of information elements, enabling interoperability across vendors and collector implementations.
 
-- **sFlow (Sampled Flow):** A multi-vendor packet sampling technology originally described in RFC 3176 (Informational). The current version, sFlow v5, is maintained by the [sFlow.org](https://sflow.org/) consortium. Unlike NetFlow and IPFIX, sFlow does not maintain a flow cache. Instead, it combines two complementary mechanisms:
-  - **Packet sampling:** The switching ASIC randomly samples packets at wire speed. A hardware counter decrements with each packet; when it reaches zero, the packet header is copied and forwarded to the sFlow agent. The counter then resets to a random value whose mean equals the configured sampling rate *N*, ensuring that on average one in every *N* packets is sampled with no CPU overhead on the switch.
-  - **Counter polling:** At a configurable interval, the sFlow agent reads interface counters (byte counts, packet counts, errors) and includes them in the export stream, providing time-series statistics similar to SNMP polling.
-
-  The sFlow agent encapsulates both packet samples and counter samples into UDP datagrams (IANA-assigned default port 6343) and sends them immediately to a collector. This stateless, hardware-accelerated design scales effectively across high-speed environments without the flow-cache exhaustion risks that can affect stateful protocols under adversarial traffic patterns such as DDoS attacks.
+- **sFlow (Sampled Flow):** A multi-vendor, stateless packet sampling technology. Unlike NetFlow and IPFIX, sFlow does not maintain a flow cache — it samples packets in hardware at wire speed and immediately exports sampled headers along with periodic interface counters via UDP. This design trades per-flow accuracy for hardware-accelerated scalability and resilience under adversarial traffic patterns. For a detailed explanation of sFlow's architecture, standardization, and ASIC requirements, see [sFlow](README_sFlow.md).
 
 This project uses **sFlow** because SONiC includes native support for it through a containerized agent, requiring minimal configuration to enable network-wide telemetry.
 

@@ -7,7 +7,7 @@ This repository provides two distinct monitoring methods:
 - **Packet Sniffing:** A lightweight, `scapy`-powered tool for deep packet inspection and PCAP generation.
 - **sFlow Telemetry:** An orchestration tool for enabling and collecting highly scalable, sampled flow metrics.
 
-For an overview of network visibility technologies (SPAN, RSPAN, ERSPAN, NetFlow, IPFIX, sFlow) and how this project's tools fit into the broader landscape, see [BACKGROUND.md](BACKGROUND.md).
+For an overview of network visibility technologies (SPAN, RSPAN, ERSPAN, NetFlow, IPFIX, sFlow) and how this project's tools fit into the broader landscape, see [BACKGROUND](README_BACKGROUND.md). For a deep dive into the sFlow protocol, its datagram format, and configuration trade-offs, see [sFlow](README_sFlow.md).
 
 ## UDP Collector and Forwarding
 
@@ -176,7 +176,9 @@ While powerful, direct packet sniffing has limitations:
 
 ## sFlow (Sampled Flow) Telemetry
 
-sFlow is a hardware-accelerated packet sampling technology for monitoring high-speed networks at scale. Rather than capturing every packet, sFlow-enabled switches randomly sample packets directly in the switching ASIC at wire speed and export sampled headers along with periodic interface counters to a centralized collector via UDP. This stateless design imposes near-zero overhead on the switch's forwarding performance while still delivering rich visibility into traffic patterns, bandwidth usage, and network behavior. For a detailed explanation of how sFlow works and how it compares to other flow export technologies, see [BACKGROUND.md](BACKGROUND.md).
+sFlow is a stateless, hardware-accelerated packet sampling technology for monitoring high-speed networks at scale. It samples packets directly in the switching ASIC at wire speed and exports sampled headers along with periodic interface counters via UDP, imposing near-zero overhead on forwarding performance.
+
+> For a comprehensive explanation of sFlow, see [sFlow](README_sFlow.md).
 
 ### Enabling sFlow on SONiC
 
